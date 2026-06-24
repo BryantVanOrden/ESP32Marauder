@@ -1,6 +1,7 @@
 #include "esp_random.h"
 #include "WiFiScan.h"
 #include "lang_var.h"
+#include "csi_integration.h"
 
 #ifdef HAS_PSRAM
   struct mac_addr* mac_history = nullptr;
@@ -1900,7 +1901,11 @@ void WiFiScan::StartScan(uint8_t scan_mode, uint16_t color) {
     #endif
   }
 
-  if (scan_mode == WIFI_SCAN_PROBE)
+  if (scan_mode == WIFI_SCAN_CSI_SENSE) {
+    this->currentScanMode = WIFI_SCAN_CSI_SENSE;
+    CsiInteg::start();
+  }
+  else if (scan_mode == WIFI_SCAN_PROBE)
     RunProbeScan(scan_mode, color);
   else if ((scan_mode == WIFI_SCAN_SAE_COMMIT) || (scan_mode == WIFI_ATTACK_SAE_COMMIT))
     RunSAEScan(scan_mode, color);
@@ -10146,6 +10151,8 @@ uint16_t WiFiScan::rssiToColor(int8_t rssi) {
 // Function for updating scan status
 void WiFiScan::main(uint32_t currentTime)
 {
+  if (currentScanMode == WIFI_SCAN_CSI_SENSE) { CsiInteg::loop(); return; }
+
   // WiFi operations
   if ((currentScanMode == WIFI_SCAN_PROBE) ||
   (currentScanMode == WIFI_SCAN_AP) ||

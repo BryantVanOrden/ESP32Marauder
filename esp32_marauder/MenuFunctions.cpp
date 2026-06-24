@@ -1687,6 +1687,11 @@ void MenuFunctions::RunSetup()
     this->drawStatusBar();
     wifi_scan_obj.StartScan(WIFI_PING_SCAN, TFT_CYAN);
   });
+  this->addNodes(&wifiScannerMenu, "WiFi CSI Sense", TFTCYAN, SCANNERS, [this]() {
+    display_obj.clearScreen();
+    this->drawStatusBar();
+    wifi_scan_obj.StartScan(WIFI_SCAN_CSI_SENSE, TFT_CYAN);
+  });
   #ifndef HAS_DUAL_BAND
     this->addNodes(&wifiScannerMenu, "ARP Scan", TFTCYAN, SCANNERS, [this]() {
       display_obj.clearScreen();

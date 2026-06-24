@@ -163,6 +163,8 @@
 
 #define WIFI_ATTACK_FUNNY_BEACON 99 
 
+#define WIFI_SCAN_CSI_SENSE 200
+
 #define BASE_MULTIPLIER 4
 
 #define ANALYZER_NAME_REFRESH 100 // Number of events to refresh the name
