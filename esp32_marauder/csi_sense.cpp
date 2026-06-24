@@ -95,11 +95,14 @@ static void startPing() {
   }
 }
 
+static char s_ssid[33] = WIFI_SSID;
+static char s_pass[64] = WIFI_PASSWORD;
+
 static void startActive() {
   if (s_ping) { esp_ping_stop(s_ping); esp_ping_delete_session(s_ping); s_ping = nullptr; }
   esp_wifi_set_promiscuous(false);
   WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  WiFi.begin(s_ssid, s_pass);
   Serial.print("[csi] joining WiFi");
   uint32_t t0 = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - t0 < 20000) {
@@ -284,6 +287,12 @@ void CsiSense::setMode(uint8_t mode)  { if (mode <= 1 && mode != s_mode) { s_mod
 void CsiSense::setChannel(uint8_t ch) { if (ch >= 1 && ch <= 13) { s_channel = ch; if (s_mode == 0) startPassive(); } }
 void CsiSense::setMotionThreshold(uint8_t t) { s_motionThresh = t; }
 void CsiSense::resetBaseline()        { s_calCount = 0; s_baselineInit = false; s_breathFill = 0; s_breathHead = 0; }
+
+void CsiSense::setCredentials(const char* ssid, const char* pass) {
+  if (ssid) { strncpy(s_ssid, ssid, sizeof(s_ssid) - 1); s_ssid[sizeof(s_ssid) - 1] = 0; }
+  if (pass) { strncpy(s_pass, pass, sizeof(s_pass) - 1); s_pass[sizeof(s_pass) - 1] = 0; }
+}
+void CsiSense::applyCredentials()     { s_mode = 1; applyMode(); }
 
 uint8_t CsiSense::mode()        { return s_mode; }
 uint8_t CsiSense::channel()     { return s_channel; }

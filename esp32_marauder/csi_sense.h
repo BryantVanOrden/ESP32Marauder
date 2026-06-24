@@ -35,6 +35,10 @@ namespace CsiSense {
   void    setMotionThreshold(uint8_t t);    // 0..255
   void    resetBaseline();                  // recalibrate empty room
 
+  // Runtime WiFi credentials (set by the phone via the control channel).
+  void    setCredentials(const char* ssid, const char* pass); // pass NULL to leave unchanged
+  void    applyCredentials();               // switch to active mode + (re)connect
+
   // Introspection (used for the Status JSON).
   uint8_t mode();
   uint8_t channel();

@@ -1,56 +1,62 @@
-// csi_integration.cpp - see csi_integration.h
+// csi_integration.cpp - glue between ESP32 Marauder and the CSI Sense feature.
+// ESP32-S2 has no Bluetooth, so CSI is streamed over the UART (to the Flipper,
+// which bridges it to the phone over the Flipper's own BLE). Control frames
+// (incl. WiFi credentials) arrive over the same UART.
 #include "csi_integration.h"
 
 #include <Arduino.h>
-#include <WiFi.h>
 #include "csi_config.h"
 #include "csi_sense.h"
-#include "csi_ble_link.h"
-#include "csi_ota.h"
+#include "csi_uart.h"
 
 static bool     s_started = false;
 static uint32_t s_lastStatus = 0;
 
-// BLE control commands -> sensing engine (see PROTOCOL.md).
-static void onCtrl(uint8_t cmd, uint8_t arg, bool hasArg) {
+static void onCtrl(uint8_t cmd, const uint8_t* payload, uint8_t len) {
   switch (cmd) {
-    case 0x01: if (hasArg) CsiSense::setMotionThreshold(arg); break;
-    case 0x02: if (hasArg) CsiSense::setMode(arg);            break;
-    case 0x03: CsiSense::resetBaseline();                     break;
-    case 0x04: if (hasArg) CsiSense::setChannel(arg);         break;
+    case CMD_THRESHOLD:   if (len >= 1) CsiSense::setMotionThreshold(payload[0]); break;
+    case CMD_MODE:        if (len >= 1) CsiSense::setMode(payload[0]);            break;
+    case CMD_RECALIBRATE: CsiSense::resetBaseline();                             break;
+    case CMD_CHANNEL:     if (len >= 1) CsiSense::setChannel(payload[0]);        break;
+    case CMD_SET_SSID: {
+      char s[33]; uint8_t n = (len < 32) ? len : 32; memcpy(s, payload, n); s[n] = 0;
+      CsiSense::setCredentials(s, nullptr);
+      break;
+    }
+    case CMD_SET_PASS: {
+      char p[64]; uint8_t n = (len < 63) ? len : 63; memcpy(p, payload, n); p[n] = 0;
+      CsiSense::setCredentials(nullptr, p);
+      break;
+    }
+    case CMD_CONNECT:     CsiSense::applyCredentials();                          break;
     default: break;
   }
 }
 
 void CsiInteg::start() {
-  // NOTE: CSI mode takes over the radio. While it runs, normal Marauder WiFi/BLE
-  // activity is paused (this is a separate, exclusive scan mode).
-  BleLink::begin(onCtrl);                       // guarded: only inits NimBLE if not already
+  // CSI mode owns the radio while active; normal Marauder WiFi scans are paused.
+  UartLink::begin(UART_BAUD);
   CsiSense::begin(DEFAULT_MODE, DEFAULT_CHANNEL);
   s_started = true;
 }
 
 void CsiInteg::loop() {
   if (!s_started) return;
-
-  if (!Ota::running() && WiFi.status() == WL_CONNECTED) Ota::begin();
-  Ota::loop();
+  UartLink::poll(onCtrl);
 
   CsiResult r;
-  if (CsiSense::poll(r)) BleLink::notifyCsi(r);
+  if (CsiSense::poll(r)) UartLink::sendCsi(r);
 
   uint32_t now = millis();
   if (now - s_lastStatus >= STATUS_PERIOD_MS) {
     s_lastStatus = now;
-    char json[192];
+    char json[160];
     snprintf(json, sizeof(json),
-             "{\"mode\":\"%s\",\"ch\":%u,\"rate\":%.1f,\"rssi\":%d,\"sub\":%u,\"cal\":%s,"
-             "\"ip\":\"%s\",\"ota\":%s}",
+             "{\"mode\":\"%s\",\"ch\":%u,\"rate\":%.1f,\"rssi\":%d,\"sub\":%u,\"cal\":%s}",
              CsiSense::mode() == 1 ? "active" : "passive",
              CsiSense::channel(), CsiSense::sampleRate(), CsiSense::lastRssi(),
-             CsiSense::subcarriers(), CsiSense::calibrated() ? "true" : "false",
-             Ota::ip().c_str(), Ota::running() ? "true" : "false");
-    BleLink::updateStatus(json);
+             CsiSense::subcarriers(), CsiSense::calibrated() ? "true" : "false");
+    UartLink::sendStatus(json);
   }
 }
 
